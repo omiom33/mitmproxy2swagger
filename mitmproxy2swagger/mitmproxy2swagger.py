@@ -22,7 +22,7 @@ def path_to_regex(path):
     path = path.replace('}', '>[^/]+)')
     path = path.replace('*', '.*')
     path = path.replace('/', '\\/')
-    return "^" + path + "$"
+    return f"^{path}$"
 
 
 def strip_query_string(path):
@@ -43,8 +43,8 @@ def detect_input_format(file_path):
     har_score = har_archive_heuristic(file_path)
     mitmproxy_score =  mitmproxy_dump_file_huristic(file_path)
     if 'MITMPROXY2SWAGGER_DEBUG' in os.environ:
-        print('har score: ' + str(har_score))
-        print('mitmproxy score: ' + str(mitmproxy_score))
+        print(f'har score: {str(har_score)}')
+        print(f'mitmproxy score: {str(mitmproxy_score)}')
     if har_score > mitmproxy_score:
         return HarCaptureReader(file_path, progress_callback)
     return MitmproxyCaptureReader(file_path, progress_callback)
@@ -67,7 +67,7 @@ def main():
     yaml = ruamel.yaml.YAML()
 
     caputre_reader = None
-    if args.format == 'flow' or args.format == 'mitmproxy':
+    if args.format in ['flow', 'mitmproxy']:
         caputre_reader = MitmproxyCaptureReader(args.input, progress_callback)
     elif args.format == 'har':
         caputre_reader = HarCaptureReader(args.input, progress_callback)
@@ -82,15 +82,16 @@ def main():
             swagger = yaml.load(f)
     except FileNotFoundError:
         print("No existing swagger file found. Creating new one.")
-        pass
     if swagger is None:
-        swagger = ruamel.yaml.comments.CommentedMap({
-            "openapi": "3.0.0",
-            "info": {
-                "title": args.input + " Mitmproxy2Swagger",
-                "version": "1.0.0"
-            },
-        })
+        swagger = ruamel.yaml.comments.CommentedMap(
+            {
+                "openapi": "3.0.0",
+                "info": {
+                    "title": f"{args.input} Mitmproxy2Swagger",
+                    "version": "1.0.0",
+                },
+            }
+        )
     # strip the trailing slash from the api prefix
     args.api_prefix = args.api_prefix.rstrip('/')
 
@@ -98,7 +99,7 @@ def main():
         swagger['servers'] = []
 
     # add the server if it doesn't exist
-    if not any(server['url'] == args.api_prefix for server in swagger['servers']):
+    if all(server['url'] != args.api_prefix for server in swagger['servers']):
         swagger['servers'].append({
             "url": args.api_prefix,
             "description": "The default server"
@@ -240,7 +241,7 @@ def main():
             param_id = 0
             for segment in segments:
                 if segment.isdigit():
-                    param_name = 'id' + str(param_id)
+                    param_name = f'id{str(param_id)}'
                     if param_id == 0:
                         param_name = 'id'
                     new_segments.append('{' + param_name + '}')
@@ -250,9 +251,8 @@ def main():
             suggested_path = '/'.join(new_segments)
             # prepend the suggested path to the new_path_templates list
             if suggested_path not in new_path_templates_with_suggestions:
-                new_path_templates_with_suggestions.append(
-                    "ignore:" + suggested_path)
-        new_path_templates_with_suggestions.append("ignore:" + path)
+                new_path_templates_with_suggestions.append(f"ignore:{suggested_path}")
+        new_path_templates_with_suggestions.append(f"ignore:{path}")
 
     # remove the ending comments not to add them twice
 
@@ -269,6 +269,7 @@ def main():
         seen = set()
         seen_add = seen.add
         return [x for x in seq if not (x in seen or seen_add(x))]
+
     swagger['x-path-templates'] = f7(swagger['x-path-templates'])
 
     swagger['x-path-templates'] = ruamel.yaml.comments.CommentedSeq(
