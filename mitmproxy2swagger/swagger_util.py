@@ -40,7 +40,7 @@ def path_template_to_endpoint_name(method, path_template):
     for param in params:
         name_parts.append("by " + param.replace('{', '').replace('}', ''))
         break
-    return method.upper() + ' ' + ' '.join(name_parts)
+    return f'{method.upper()} ' + ' '.join(name_parts)
 
 
 # when given an url and its path template, generates the parameters section of the request
@@ -48,49 +48,50 @@ def url_to_params(url, path_template):
     path_template = path_template.strip('/')
     segments = path_template.split('/')
     url_segments = url.split('?')[0].strip('/').split('/')
-    params = []
-    for idx, segment in enumerate(segments):
-        if segment.startswith('{') and segment.endswith('}'):
-            params.append({
-                'name': segment.replace('{', '').replace('}', ''),
-                'in': 'path',
-                'required': True,
-                'schema': {
-                    'type': 'number' if url_segments[idx].isdigit() else 'string'
-                }
-            })
-    query_string = urllib.parse.urlparse(url).query
-    if query_string:
+    params = [
+        {
+            'name': segment.replace('{', '').replace('}', ''),
+            'in': 'path',
+            'required': True,
+            'schema': {
+                'type': 'number' if url_segments[idx].isdigit() else 'string'
+            },
+        }
+        for idx, segment in enumerate(segments)
+        if segment.startswith('{') and segment.endswith('}')
+    ]
+    if query_string := urllib.parse.urlparse(url).query:
         query_params = urllib.parse.parse_qs(query_string)
-        for key in query_params:
-            params.append({
+        params.extend(
+            {
                 'name': key,
                 'in': 'query',
                 'required': False,
                 'schema': {
-                    'type': 'number' if query_params[key][0].isdigit() else 'string'
-                }
-            })
+                    'type': 'number'
+                    if query_params[key][0].isdigit()
+                    else 'string'
+                },
+            }
+            for key in query_params
+        )
     return params
 
 
 def value_to_schema(value):
     # check if value is a number
-    if type(value) == int or type(value) == float:
+    if type(value) in [int, float]:
         return {
             'type': 'number'
         }
-    # check if value is a boolean
     elif type(value) == bool:
         return {
             'type': 'boolean'
         }
-    # check if value is a string
     elif type(value) == str:
         return {
             'type': 'string'
         }
-    # check if value is a list
     elif type(value) == list:
         if len(value) == 0:
             return {
@@ -102,7 +103,6 @@ def value_to_schema(value):
             'type': 'array',
             'items': value_to_schema(value[0])
         }
-    # check if value is a dict
     elif type(value) == dict:
         return {
             'type': 'object',
@@ -111,7 +111,6 @@ def value_to_schema(value):
                 for key in value
             }
         }
-    # if it is none, return null
     elif value is None:
         return {
             'type': 'object'
